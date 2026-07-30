@@ -8,7 +8,9 @@
 
 #pragma once
 
-struct Base;
+namespace blender {
+
+struct bContext;
 struct KeyBlock;
 struct Lattice;
 struct Object;
@@ -29,12 +31,13 @@ bool ED_lattice_flags_set(Object *obedit, int flag);
 /**
  * \return True when pick finds an element or the selection changed.
  */
-bool ED_lattice_select_pick(bContext *C, const int mval[2], const SelectPick_Params *params);
+bool ED_lattice_select_pick(bContext *C, const int mval[2], const SelectPick_Params &params);
 
-bool ED_lattice_deselect_all_multi_ex(Base **bases, uint bases_len);
 bool ED_lattice_deselect_all_multi(bContext *C);
 
 /* `editlattice_undo.cc` */
 
 /** Export for ED_undo_sys. */
 void ED_lattice_undosys_type(UndoType *ut);
+
+}  // namespace blender

@@ -1,14 +1,31 @@
+/* SPDX-FileCopyrightText: 2025 Goo Engine Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
-void node_shader_info(vec3 position, vec3 normal,
-out vec4 half_light, out float shadows, out float self_shadows, out vec4 ambient)
-{
-    // Implicitly included by eevee shader linking.
-    calc_shader_info(position, normal, half_light, shadows, self_shadows, ambient);
-}
+/* Shader Info node (ported from Goo Engine, SH_NODE_SHADER_INFO).
+ *
+ * In the Shader-to-RGB / forward path (which this node forces via GPU_MATFLAG_SHADER_TO_RGBA),
+ * `shader_info_eval` evaluates real EEVEE direct diffuse lighting + shadow ratio + light-probe
+ * ambient. In other pipelines (or non-fragment stages) the engine light resources are not bound,
+ * so it returns neutral defaults. */
 
-void node_shader_info_light_groups(vec3 position, vec3 normal, vec4 light_groups, vec4 light_group_shadows,
-out vec4 half_light, out float shadows, out float self_shadows, out vec4 ambient)
+[[node]] void node_shader_info(float3 world_position,
+                               float3 normal,
+                               float4 light_groups_f,
+                               float4 light_group_shadows_f,
+                               float4 &diffuse_shading,
+                               float &cast_shadows,
+                               float &self_shadows,
+                               float4 &ambient,
+                               float &half_lambert)
 {
-    // Implicitly included by eevee shader linking.
-    calc_shader_info(position, normal, floatBitsToInt(light_groups), floatBitsToInt(light_group_shadows), half_light, shadows, self_shadows, ambient);
+  shader_info_eval(world_position,
+                   normal,
+                   floatBitsToInt(light_groups_f),
+                   floatBitsToInt(light_group_shadows_f),
+                   diffuse_shading,
+                   cast_shadows,
+                   self_shadows,
+                   ambient,
+                   half_lambert);
 }

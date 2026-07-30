@@ -4,37 +4,43 @@
 
 #pragma once
 
-#include <memory>
+#include <cstdint>
 
-namespace blender::realtime_compositor {
+namespace blender {
+
+namespace compositor {
 class RenderContext;
-}
+enum class NodeGroupOutputTypes : uint8_t;
+}  // namespace compositor
 
 struct bNodeTree;
-struct Depsgraph;
 struct Render;
+struct Main;
 struct RenderData;
 struct Scene;
 
 /* ------------------------------------------------------------------------------------------------
- * Render Realtime Compositor
+ * Render Compositor
  *
  * Implementation of the compositor for final rendering, as opposed to the viewport compositor
  * that is part of the draw manager. The input and output of this is pre-existing RenderResult
  * buffers in scenes, that are uploaded to and read back from the GPU. */
 
-namespace blender::render {
-class RealtimeCompositor;
+namespace render {
+class Compositor;
 }
 
 /* Execute compositor. */
 void RE_compositor_execute(Render &render,
+                           const Main &main,
                            const Scene &scene,
                            const RenderData &render_data,
                            const bNodeTree &node_tree,
-                           const bool use_file_output,
                            const char *view_name,
-                           blender::realtime_compositor::RenderContext *render_context);
+                           compositor::RenderContext *render_context,
+                           compositor::NodeGroupOutputTypes needed_outputs);
 
 /* Free compositor caches. */
 void RE_compositor_free(Render &render);
+
+}  // namespace blender

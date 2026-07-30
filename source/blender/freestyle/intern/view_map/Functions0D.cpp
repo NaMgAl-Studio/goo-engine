@@ -12,7 +12,7 @@
 
 #include "BLI_sys_types.h"
 
-#include "BKE_global.h"
+#include "BKE_global.hh"
 
 using namespace std;
 
@@ -328,7 +328,7 @@ int QuantitativeInvisibilityF0D::operator()(Interface0DIterator &iter)
   if (ve2 != nullptr) {
     qi2 = ve2->qi();
     if (qi2 != qi1) {
-      if (G.debug & G_DEBUG_FREESTYLE) {
+      if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
         cout << "QuantitativeInvisibilityF0D: ambiguous evaluation for point " << iter->getId()
              << endl;
       }

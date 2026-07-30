@@ -10,6 +10,8 @@
 #include "BLI_math_base.h"
 #include "BLI_utildefines.h"
 
+namespace blender {
+
 #define TRUE_VAL 1.0
 #define FALSE_VAL 0.0
 
@@ -294,7 +296,7 @@ TEST(expr_pylike, Eval_Ternary1)
 TEST(expr_pylike, MultipleArgs)
 {
   const char *names[3] = {"x", "y", "x"};
-  double values[3] = {1.0, 2.0, 3.0};
+  const double values[3] = {1.0, 2.0, 3.0};
 
   ExprPyLike_Parsed *expr = BLI_expr_pylike_parse("x*10 + y", names, ARRAY_SIZE(names));
 
@@ -364,3 +366,5 @@ TEST(expr_pylike, Error_ArgumentCount)
 
   BLI_expr_pylike_free(expr);
 }
+
+}  // namespace blender

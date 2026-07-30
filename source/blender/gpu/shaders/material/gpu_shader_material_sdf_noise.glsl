@@ -1,79 +1,68 @@
+/* SPDX-FileCopyrightText: 2025 Goo Engine Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
-// http://iquilezles.org/www/articles/smin/smin.htm
-float smin( float a, float b, float k )
+/* SDF Noise: Fractal Brownian Motion signed-distance noise, ported from Goo
+ * Engine. Self-contained (based on Inigo Quilez fbmsdf). Written in Blender
+ * 5.2's shading language. */
+
+/* http://iquilezles.org/www/articles/smin/smin.htm */
+float sdf_noise_smin(float a, float b, float k)
 {
-    float h = max(k-abs(a-b),0.0);
-    return min(a, b) - h*h*0.25/k;
+  float h = max(k - abs(a - b), 0.0f);
+  return min(a, b) - h * h * 0.25f / k;
 }
 
-// http://iquilezles.org/www/articles/smin/smin.htm
-float smax( float a, float b, float k )
+float sdf_noise_smax(float a, float b, float k)
 {
-    float h = max(k-abs(a-b),0.0);
-    return max(a, b) + h*h*0.25/k;
+  float h = max(k - abs(a - b), 0.0f);
+  return max(a, b) + h * h * 0.25f / k;
 }
 
-// https://iquilezles.org/www/articles/fbmsdf/fbmsdf.htm
-float sph( vec3 i, vec3 f, vec3 c )
+/* https://iquilezles.org/www/articles/fbmsdf/fbmsdf.htm */
+float sdf_noise_sph(float3 i, float3 f, float3 c)
 {
-    // random radius at grid vertex i+c (please replace this hash by
-    // something better if you plan to use this for a real application)
-    vec3  p = 17.0*fract( (i+c)*0.3183099+vec3(0.11,0.17,0.13) );
-    float w = fract( p.x*p.y*p.z*(p.x+p.y+p.z) );
-    float r = 0.7*w*w;
-    // distance to sphere at grid vertex i+c
-    return length(f-c) - r;
+  float3 p = 17.0f * fract((i + c) * 0.3183099f + float3(0.11f, 0.17f, 0.13f));
+  float w = fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+  float r = 0.7f * w * w;
+  return length(f - c) - r;
 }
 
-// https://iquilezles.org/www/articles/fbmsdf/fbmsdf.htm
-float sdBase( in vec3 p )
+float sdf_noise_base(float3 p)
 {
-    vec3 i = floor(p);
-    vec3 f = fract(p);
-    return min(min(min(sph(i,f,vec3(0,0,0)),
-                       sph(i,f,vec3(0,0,1))),
-                   min(sph(i,f,vec3(0,1,0)),
-                       sph(i,f,vec3(0,1,1)))),
-               min(min(sph(i,f,vec3(1,0,0)),
-                       sph(i,f,vec3(1,0,1))),
-                   min(sph(i,f,vec3(1,1,0)),
-                       sph(i,f,vec3(1,1,1)))));
+  float3 i = floor(p);
+  float3 f = fract(p);
+  return min(min(min(sdf_noise_sph(i, f, float3(0.0f, 0.0f, 0.0f)),
+                     sdf_noise_sph(i, f, float3(0.0f, 0.0f, 1.0f))),
+                 min(sdf_noise_sph(i, f, float3(0.0f, 1.0f, 0.0f)),
+                     sdf_noise_sph(i, f, float3(0.0f, 1.0f, 1.0f)))),
+             min(min(sdf_noise_sph(i, f, float3(1.0f, 0.0f, 0.0f)),
+                     sdf_noise_sph(i, f, float3(1.0f, 0.0f, 1.0f))),
+                 min(sdf_noise_sph(i, f, float3(1.0f, 1.0f, 0.0f)),
+                     sdf_noise_sph(i, f, float3(1.0f, 1.0f, 1.0f)))));
 }
 
-float sdFbm(
-    in vec3 p,
-    in float detail,
-    in float rough,
-    in float inflate,
-    in float smooth_fac,
-    in float d )
+float sdf_noise_fbm(
+    float3 p, float detail, float rough, float inflate, float smooth_fac, float d)
 {
-    float s = 1.0;
-    for( int i=0; i < min(int(detail), 12); i++ )
-    {
-        // evaluate new octave
-        float n = s*sdBase(p);
-
-        // add
-        n = smax(n,d - inflate*s, smooth_fac*s );
-        d = smin(n,d      , smooth_fac*s );
-
-        // prepare next octave
-        p = mat3( 0.00, 1.60, 1.20,
-                  -1.60, 0.72,-0.96,
-                  -1.20,-0.96, 1.28 )*p;
-        s = rough*s;
-    }
-    return d;
+  float s = 1.0f;
+  for (int i = 0; i < min(int(detail), 12); i++) {
+    float n = s * sdf_noise_base(p);
+    n = sdf_noise_smax(n, d - inflate * s, smooth_fac * s);
+    d = sdf_noise_smin(n, d, smooth_fac * s);
+    p = float3x3(0.00f, 1.60f, 1.20f, -1.60f, 0.72f, -0.96f, -1.20f, -0.96f, 1.28f) * p;
+    s = rough * s;
+  }
+  return d;
 }
 
-void node_sdf_noise(in vec3 pos,
-    in float dist_in,
-    in float detail,
-    in float rough,
-    in float inflate_fac,
-    in float smooth_fac,
-    out float dist_out)
+[[node]] void node_sdf_noise(float3 pos,
+                             float dist_in,
+                             float detail,
+                             float rough,
+                             float inflate_fac,
+                             float smooth_fac,
+                             float &dist_out)
 {
-    dist_out = sdFbm(pos, detail, rough, inflate_fac, smooth_fac, dist_in);
+  dist_out = sdf_noise_fbm(pos, detail, rough, inflate_fac, smooth_fac, dist_in);
 }

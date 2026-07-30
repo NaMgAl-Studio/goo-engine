@@ -10,8 +10,9 @@
 #include "WXEdge.h"
 
 #include "BLI_sys_types.h"
+#include "BLI_utildefines.h"
 
-#include "BKE_global.h"
+#include "BKE_global.hh"
 
 namespace Freestyle {
 
@@ -117,7 +118,7 @@ WXSmoothEdge *WXFaceLayer::BuildSmoothEdge()
     RetrieveCuspEdgesIndices(cuspEdgesIndices);
     // We should have only one EdgeCusp:
     if (cuspEdgesIndices.size() != 1) {
-      if (G.debug & G_DEBUG_FREESTYLE) {
+      if (blender::G.debug & blender::G_DEBUG_FREESTYLE) {
         cout << "Warning in BuildSmoothEdge: weird WXFace configuration" << endl;
       }
       _pSmoothEdge = nullptr;

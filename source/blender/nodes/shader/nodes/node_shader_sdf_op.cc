@@ -1,60 +1,48 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
+/* SPDX-FileCopyrightText: 2021 Blender Authors
+ * SPDX-FileCopyrightText: 2025 Goo Engine Authors
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2021 Blender Foundation.
- * All rights reserved.
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup shdnodes
+ *
+ * SDF Operator node (ported from Goo Engine, SH_NODE_SDF_OP). Combines/modifies
+ * scalar signed-distance-field values. GPU-only, pure math.
  */
 
-#include "RNA_enum_types.hh"
+#include "DNA_node_types.h"
 
-#include "UI_interface.hh"
-#include "UI_resources.hh"
 #include "RNA_access.hh"
-#include "BLI_string.h"
 
-#include "../node_shader_util.hh"
+#include "UI_interface_layout.hh"
+#include "UI_resources.hh"
+
 #include "node_util.hh"
+#include "node_shader_util.hh"
 
-using namespace blender::bke;
+namespace blender {
 
-namespace blender::nodes {
+namespace nodes::node_shader_sdf_op_cc {
 
-static void sh_node_sdf_op_declare(NodeDeclarationBuilder &b)
+NODE_STORAGE_FUNCS(NodeSdfOp)
+
+static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Float>("Distance").min(-100000.0f).max(100000.0f).default_value(0.5f);
-  b.add_input<decl::Float>("Distance", "Distance_001")
-      .min(-100000)
-      .max(100000)
-      .default_value(0.5f);
-  b.add_input<decl::Float>("Value").min(-100000.0f).max(100000.0f).default_value(0.5f);
-  b.add_input<decl::Float>("Value", "Value_001")
+  b.add_input<decl::Float>("Distance"_ustr).min(-100000.0f).max(100000.0f).default_value(0.5f);
+  b.add_input<decl::Float>("Distance"_ustr, "Distance_001"_ustr)
       .min(-100000.0f)
       .max(100000.0f)
       .default_value(0.5f);
-  b.add_input<decl::Int>("Count").min(-100000).max(100000).default_value(1);
-
-  b.add_output<decl::Float>("Distance");
+  b.add_input<decl::Float>("Value"_ustr).min(-100000.0f).max(100000.0f).default_value(0.5f);
+  b.add_input<decl::Float>("Value"_ustr, "Value_001"_ustr)
+      .min(-100000.0f)
+      .max(100000.0f)
+      .default_value(0.5f);
+  b.add_input<decl::Int>("Count"_ustr).min(-100000).max(100000).default_value(1);
+  b.add_output<decl::Float>("Distance"_ustr);
 }
 
-}  // namespace blender::nodes
-
-static const char *node_shader_sdf_op_get_name(int mode)
+static const char *sdf_op_get_name(int mode)
 {
   switch (mode) {
     case SHD_SDF_OP_DILATE:
@@ -73,7 +61,6 @@ static const char *node_shader_sdf_op_get_name(int mode)
       return "node_sdf_op_mask";
     case SHD_SDF_OP_PULSE:
       return "node_sdf_op_pulse";
-
     case SHD_SDF_OP_PIPE:
       return "node_sdf_op_pipe";
     case SHD_SDF_OP_ENGRAVE:
@@ -123,178 +110,105 @@ static const char *node_shader_sdf_op_get_name(int mode)
     case SHD_SDF_OP_EXCLUSION:
       return "node_sdf_op_exclusion";
   }
-
   return nullptr;
 }
 
 static int node_shader_gpu_sdf_op(GPUMaterial *mat,
                                   bNode *node,
-                                  bNodeExecData * /* execdata */,
+                                  bNodeExecData * /*execdata*/,
                                   GPUNodeStack *in,
                                   GPUNodeStack *out)
 {
-  NodeSdfOp *sdf = (NodeSdfOp *)node->storage;
-
-  const char *name = node_shader_sdf_op_get_name(sdf->operation);
-
+  const NodeSdfOp &sdf = node_storage(*node);
+  const char *name = sdf_op_get_name(sdf.operation);
   if (name != nullptr) {
-    float invert = (sdf->invert) ? 1.0f : -1.0f;
+    float invert = (sdf.invert) ? 1.0f : -1.0f;
     return GPU_stack_link(mat, node, name, in, out, GPU_constant(&invert));
   }
-  else {
-    return 0;
-  }
+  return 0;
 }
 
-static void node_shader_label_sdf_op(const struct bNodeTree * /* ntree */,
-                                     const struct bNode *node,
-                                     char *label,
-                                     int maxlen)
+static void node_shader_init_sdf_op(bNodeTree * /*ntree*/, bNode *node)
 {
-  NodeSdfOp &node_storage = *(NodeSdfOp *)node->storage;
-  const char *name;
-  bool enum_label = RNA_enum_name(rna_enum_node_sdf_op_items, node_storage.operation, &name);
-  if (!enum_label) {
-    name = "Unknown SDF Op";
-  }
-  BLI_strncpy(label, IFACE_(name), maxlen);
-}
-
-static void node_shader_update_sdf_op(bNodeTree *ntree, bNode *node)
-{
-  NodeSdfOp *sdf = (NodeSdfOp *)node->storage;
-
-  bNodeSocket *sockInputA = (bNodeSocket *)BLI_findlink(&node->inputs, 0);
-  bNodeSocket *sockInputB = (bNodeSocket *)BLI_findlink(&node->inputs, 1);
-  bNodeSocket *sockValue = (bNodeSocket *)BLI_findlink(&node->inputs, 2);
-  bNodeSocket *sockValue2 = (bNodeSocket *)BLI_findlink(&node->inputs, 3);
-  bNodeSocket *sockCount = (bNodeSocket *)BLI_findlink(&node->inputs, 4);
-
-  bNodeSocket *sockDistanceOut = (bNodeSocket *)BLI_findlink(&node->outputs, 0);
-
-  /* Distance */
-  nodeSetSocketAvailability(ntree, sockInputA, true);
-
-  nodeSetSocketAvailability(ntree, sockInputB,
-                            !ELEM(sdf->operation,
-                                  SHD_SDF_OP_MASK,
-                                  SHD_SDF_OP_INVERT,
-                                  SHD_SDF_OP_DILATE,
-                                  SHD_SDF_OP_ONION,
-                                  SHD_SDF_OP_ANNULAR,
-                                  SHD_SDF_OP_PULSE,
-                                  SHD_SDF_OP_FLATTEN));
-
-  /* Values */
-  nodeSetSocketAvailability(ntree, sockValue,
-                            !ELEM(sdf->operation,
-                                  SHD_SDF_OP_UNION,
-                                  SHD_SDF_OP_INTERSECT,
-                                  SHD_SDF_OP_DIFF,
-                                  SHD_SDF_OP_INVERT));
-
-  nodeSetSocketAvailability(ntree, sockValue2,
-                            ELEM(sdf->operation,
-                                 SHD_SDF_OP_DIVIDE,
-                                 SHD_SDF_OP_FLATTEN,
-                                 SHD_SDF_OP_PULSE,
-                                 SHD_SDF_OP_EXCLUSION,
-                                 SHD_SDF_OP_TONGUE,
-                                 SHD_SDF_OP_GROOVE,
-                                 SHD_SDF_OP_UNION_COLUMNS,
-                                 SHD_SDF_OP_INTERSECT_COLUMNS,
-                                 SHD_SDF_OP_DIFF_COLUMNS,
-                                 SHD_SDF_OP_UNION_STAIRS,
-                                 SHD_SDF_OP_INTERSECT_STAIRS,
-                                 SHD_SDF_OP_DIFF_STAIRS));
-
-  nodeSetSocketAvailability(ntree, sockCount, ELEM(sdf->operation, SHD_SDF_OP_ONION));
-
-  node_sock_label_clear(sockValue);
-  node_sock_label_clear(sockValue2);
-  node_sock_label_clear(sockDistanceOut);
-  node_sock_label(sockInputA, "Distance");
-  node_sock_label(sockInputB, "Distance");
-  node_sock_label(sockDistanceOut, "Distance");
-
-  switch (sdf->operation) {
-    case SHD_SDF_OP_UNION_SMOOTH:
-    case SHD_SDF_OP_INTERSECT_SMOOTH:
-    case SHD_SDF_OP_DIFF_SMOOTH:
-      node_sock_label(sockValue, "Smooth");
-      break;
-    case SHD_SDF_OP_BLEND:
-      node_sock_label(sockValue, "Factor");
-      break;
-    case SHD_SDF_OP_MASK:
-      node_sock_label(sockValue, "Feather");
-      node_sock_label(sockValue2, "Expand");
-      node_sock_label(sockDistanceOut, "Value");
-      break;
-    case SHD_SDF_OP_FLATTEN:
-      node_sock_label(sockValue, "Min");
-      node_sock_label(sockValue2, "Max");
-      node_sock_label(sockDistanceOut, "Value");
-      break;
-    case SHD_SDF_OP_PULSE:
-      node_sock_label(sockInputA, "Value");
-      node_sock_label(sockValue, "Center");
-      node_sock_label(sockValue2, "Width");
-      node_sock_label(sockDistanceOut, "Value");
-      break;
-    case SHD_SDF_OP_DIVIDE:
-    case SHD_SDF_OP_EXCLUSION:
-      node_sock_label(sockValue, "Gap");
-      node_sock_label(sockValue2, "Gap");
-      break;
-    case SHD_SDF_OP_UNION_COLUMNS:
-    case SHD_SDF_OP_INTERSECT_COLUMNS:
-    case SHD_SDF_OP_DIFF_COLUMNS:
-    case SHD_SDF_OP_UNION_STAIRS:
-    case SHD_SDF_OP_INTERSECT_STAIRS:
-    case SHD_SDF_OP_DIFF_STAIRS:
-      node_sock_label(sockValue2, "Count");
-      break;
-    case SHD_SDF_OP_TONGUE:
-    case SHD_SDF_OP_GROOVE:
-      node_sock_label(sockValue, "Size");
-      node_sock_label(sockValue2, "Gap");
-      break;
-    case SHD_SDF_OP_PIPE:
-      node_sock_label(sockValue, "Size");
-      break;
-  }
-}
-
-static void node_shader_init_sdf_op(bNodeTree * /* ntree */, bNode *node)
-{
-  NodeSdfOp *sdf = (NodeSdfOp *)MEM_callocN(sizeof(NodeSdfOp), __func__);
+  NodeSdfOp *sdf = MEM_new<NodeSdfOp>(__func__);
   sdf->operation = SHD_SDF_OP_UNION;
   sdf->invert = 0;
   node->storage = sdf;
 }
 
-static void node_shader_buts_sdf_op(uiLayout *layout, bContext * /* C */, PointerRNA *ptr)
+static void node_shader_buts_sdf_op(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 {
-  uiItemR(layout, ptr, "operation", UI_ITEM_NONE, "", ICON_NONE);
+  layout.prop(ptr, "operation", UI_ITEM_NONE, "", ICON_NONE);
   int type = RNA_enum_get(ptr, "operation");
   if (ELEM(type, SHD_SDF_OP_MASK)) {
-    uiItemR(layout, ptr, "invert", UI_ITEM_NONE, NULL, ICON_NONE);
+    layout.prop(ptr, "invert", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 }
 
-/* node type definition */
-void register_node_type_sh_sdf_op(void)
+static void node_shader_update_sdf_op(bNodeTree *ntree, bNode *node)
 {
-  static bNodeType ntype;
+  const NodeSdfOp &sdf = node_storage(*node);
+  bNodeSocket *sock_a = bke::node_find_socket(*node, SOCK_IN, "Distance"_ustr);
+  bNodeSocket *sock_b = bke::node_find_socket(*node, SOCK_IN, "Distance_001"_ustr);
+  bNodeSocket *sock_v = bke::node_find_socket(*node, SOCK_IN, "Value"_ustr);
+  bNodeSocket *sock_v2 = bke::node_find_socket(*node, SOCK_IN, "Value_001"_ustr);
+  bNodeSocket *sock_count = bke::node_find_socket(*node, SOCK_IN, "Count"_ustr);
 
-  sh_node_type_base(&ntype, SH_NODE_SDF_OP, "Sdf Operator", NODE_CLASS_CONVERTER);
-  ntype.declare = blender::nodes::sh_node_sdf_op_declare;
-  node_type_storage(&ntype, "NodeSdfOp", node_free_standard_storage, node_copy_standard_storage);
-  ntype.gpu_fn = node_shader_gpu_sdf_op;
-  ntype.initfunc = node_shader_init_sdf_op;
-  ntype.labelfunc = node_shader_label_sdf_op;
-  ntype.updatefunc = node_shader_update_sdf_op;
-  ntype.draw_buttons = node_shader_buts_sdf_op;
-  nodeRegisterType(&ntype);
+  bke::node_set_socket_availability(*ntree, *sock_a, true);
+  bke::node_set_socket_availability(*ntree,
+                                    *sock_b,
+                                    !ELEM(sdf.operation,
+                                          SHD_SDF_OP_MASK,
+                                          SHD_SDF_OP_INVERT,
+                                          SHD_SDF_OP_DILATE,
+                                          SHD_SDF_OP_ONION,
+                                          SHD_SDF_OP_ANNULAR,
+                                          SHD_SDF_OP_PULSE,
+                                          SHD_SDF_OP_FLATTEN));
+  bke::node_set_socket_availability(
+      *ntree,
+      *sock_v,
+      !ELEM(sdf.operation, SHD_SDF_OP_UNION, SHD_SDF_OP_INTERSECT, SHD_SDF_OP_DIFF, SHD_SDF_OP_INVERT));
+  bke::node_set_socket_availability(*ntree,
+                                    *sock_v2,
+                                    ELEM(sdf.operation,
+                                         SHD_SDF_OP_DIVIDE,
+                                         SHD_SDF_OP_FLATTEN,
+                                         SHD_SDF_OP_PULSE,
+                                         SHD_SDF_OP_EXCLUSION,
+                                         SHD_SDF_OP_TONGUE,
+                                         SHD_SDF_OP_GROOVE,
+                                         SHD_SDF_OP_UNION_COLUMNS,
+                                         SHD_SDF_OP_INTERSECT_COLUMNS,
+                                         SHD_SDF_OP_DIFF_COLUMNS,
+                                         SHD_SDF_OP_UNION_STAIRS,
+                                         SHD_SDF_OP_INTERSECT_STAIRS,
+                                         SHD_SDF_OP_DIFF_STAIRS));
+  bke::node_set_socket_availability(*ntree, *sock_count, ELEM(sdf.operation, SHD_SDF_OP_ONION));
 }
+
+}  // namespace nodes::node_shader_sdf_op_cc
+
+void register_node_type_sh_sdf_op()
+{
+  namespace file_ns = nodes::node_shader_sdf_op_cc;
+
+  static bke::bNodeType ntype;
+
+  common_node_type_base(&ntype, "ShaderNodeSdfOp"_ustr, SH_NODE_SDF_OP);
+  ntype.ui_name = "SDF Operator";
+  ntype.ui_description = "Combine or modify signed distance field values";
+  ntype.enum_name_legacy = "SDF_OP";
+  ntype.nclass = NODE_CLASS_CONVERTER;
+  ntype.declare = file_ns::node_declare;
+  ntype.initfunc = file_ns::node_shader_init_sdf_op;
+  ntype.updatefunc = file_ns::node_shader_update_sdf_op;
+  ntype.draw_buttons = file_ns::node_shader_buts_sdf_op;
+  bke::node_type_storage(
+      ntype, "NodeSdfOp", node_free_standard_storage, node_copy_standard_storage);
+  ntype.gpu_fn = file_ns::node_shader_gpu_sdf_op;
+
+  bke::node_register_type(ntype);
+}
+
+}  // namespace blender

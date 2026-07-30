@@ -1,74 +1,70 @@
-/*
-* This program is free software; you can redistribute it and/or
-* modify it under the terms of the GNU General Public License
-* as published by the Free Software Foundation; either version 2
-* of the License, or (at your option) any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software Foundation,
-* Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-*
-* The Original Code is Copyright (C) 2005 Blender Foundation.
-* All rights reserved.
-*/
+/* SPDX-FileCopyrightText: 2025 Goo Engine Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "../node_shader_util.hh"
+/** \file
+ * \ingroup shdnodes
+ *
+ * SDF Noise node (ported from Goo Engine, SH_NODE_SDF_NOISE = 805).
+ * Pure math, engine-independent. No custom storage.
+ */
 
-namespace blender::nodes::node_shader_sdf_noise_cc {
+#include "node_shader_util.hh"
+
+namespace blender {
+
+namespace nodes::node_shader_sdf_noise_cc {
+
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Vector>(N_("Position")).hide_value();
-  b.add_input<decl::Float>(N_("Distance"));
-  b.add_input<decl::Float>(N_("Detail"))
-      .default_value(4.f)
-      .min(0.f)
-      .max(12.f);
-  b.add_input<decl::Float>(N_("Roughness"))
+  b.add_input<decl::Vector>("Position"_ustr).hide_value();
+  b.add_input<decl::Float>("Distance"_ustr);
+  b.add_input<decl::Float>("Detail"_ustr).default_value(4.0f).min(0.0f).max(12.0f);
+  b.add_input<decl::Float>("Roughness"_ustr)
       .default_value(0.5f)
-      .min(0.f)
-      .max(1.f)
+      .min(0.0f)
+      .max(1.0f)
       .subtype(PROP_FACTOR);
-  b.add_input<decl::Float>(N_("Detail Inflation"))
+  b.add_input<decl::Float>("Detail Inflation"_ustr)
       .default_value(0.1f)
-      .min(0.f)
-      .max(1.f)
+      .min(0.0f)
+      .max(1.0f)
       .subtype(PROP_FACTOR);
-  b.add_input<decl::Float>(N_("Detail Blend"))
+  b.add_input<decl::Float>("Detail Blend"_ustr)
       .default_value(0.3f)
-      .min(0.f)
-      .max(1.f)
+      .min(0.0f)
+      .max(1.0f)
       .subtype(PROP_FACTOR);
-
-  b.add_output<decl::Float>(N_("Distance"));
-}
+  b.add_output<decl::Float>("Distance"_ustr);
 }
 
 static int node_shader_gpu_sdf_noise(GPUMaterial *mat,
-                                    bNode *node,
-                                    bNodeExecData* /* execdata */,
-                                    GPUNodeStack *in,
-                                    GPUNodeStack *out)
+                                     bNode *node,
+                                     bNodeExecData * /*execdata*/,
+                                     GPUNodeStack *in,
+                                     GPUNodeStack *out)
 {
- node_shader_gpu_default_tex_coord(mat, node, &in[0].link);
-
- return GPU_stack_link(mat, node, "node_sdf_noise", in, out);
+  node_shader_gpu_default_tex_coord(mat, node, &in[0].link);
+  return GPU_stack_link(mat, node, "node_sdf_noise", in, out);
 }
 
-/* node type definition */
-void register_node_type_sh_sdf_noise(void)
+}  // namespace nodes::node_shader_sdf_noise_cc
+
+void register_node_type_sh_sdf_noise()
 {
- namespace file_ns = blender::nodes::node_shader_sdf_noise_cc;
+  namespace file_ns = nodes::node_shader_sdf_noise_cc;
 
- static bNodeType ntype;
+  static bke::bNodeType ntype;
 
- sh_node_type_base(&ntype, SH_NODE_SDF_NOISE, "SDF Noise", NODE_CLASS_TEXTURE);
- ntype.declare = file_ns::node_declare;
- ntype.gpu_fn = node_shader_gpu_sdf_noise;
+  common_node_type_base(&ntype, "ShaderNodeSdfNoise"_ustr, SH_NODE_SDF_NOISE);
+  ntype.ui_name = "SDF Noise";
+  ntype.ui_description = "Fractal Brownian Motion noise applied to a signed distance field";
+  ntype.enum_name_legacy = "SDF_NOISE";
+  ntype.nclass = NODE_CLASS_TEXTURE;
+  ntype.declare = file_ns::node_declare;
+  ntype.gpu_fn = file_ns::node_shader_gpu_sdf_noise;
 
- nodeRegisterType(&ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

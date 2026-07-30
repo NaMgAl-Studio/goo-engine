@@ -1,115 +1,120 @@
-#pragma BLENDER_REQUIRE(gpu_shader_common_math_utils.glsl)
-
-/**
- * SDF Functions based on these sources, inc comments:
+/* SPDX-FileCopyrightText: 2018-2021 Inigo Quilez (MIT)
+ * SPDX-FileCopyrightText: 2011-2021 Mercury Demogroup (MIT)
+ * SPDX-FileCopyrightText: 2025 Goo Engine Authors
  *
- * The MIT License
- * Copyright © 2018-2021 Inigo Quilez
- * - https://www.iquilezles.org/www/articles/distfunctions2d/distfunctions2d.htm
- *
- * The MIT License
- * Copyright (c) 2011-2021 Mercury Demogroup
- * - http://mercury.sexy/hg_sdf/
- *
- */
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#define M_SQRT3 1.73205080756887729352   /* sqrt(3) */
-#define M_SQRT3_2 0.86602540378443864676 /* sqrt(3)/2 */
-#define M_SQRT1_3 0.57735026918962576450 /* sqrt(1/3) */
-#define M_SQRT1_2 0.70710678118654752440 /* sqrt(1/2) */
-#define M_PHI 4.97213595499957939281     /* (sqrt(5)*0.5 + 0.5) */
+/* Shared SDF helper library, ported from Goo Engine to the Blender 5.2 shader
+ * dialect: `inout`->reference (`&`), `in` dropped, vec/mat -> float types, and
+ * `safe_divide` re-supplied as `sdf_safe_divide`. M_PI / M_SQRT2 / M_SQRT1_2 /
+ * M_SQRT3 come from the constants lib; only goo-specific constants are defined. */
 
-float safe_mod(float a, float b)
+#include "gpu_shader_math_constants_lib.glsl"
+
+#define M_SQRT3_2 0.86602540378443864676f /* sqrt(3)/2 */
+#define M_PHI 4.97213595499957939281f     /* (sqrt(5)*0.5 + 0.5) */
+
+float sdf_safe_divide(float a, float b)
 {
-  return (b != 0.0) ? a - b * floor(a / b) : 0.0;
+  return (b != 0.0f) ? a / b : 0.0f;
 }
 
-vec3 safe_mod(vec3 a, float b)
+float2 sdf_safe_divide(float2 a, float2 b)
 {
-  a.x = safe_mod(a.x, b);
-  a.y = safe_mod(a.y, b);
-  a.z = safe_mod(a.z, b);
-  return a;
+  return float2(sdf_safe_divide(a.x, b.x), sdf_safe_divide(a.y, b.y));
 }
 
-vec3 safe_mod(vec3 a, vec3 b)
+float3 sdf_safe_divide(float3 a, float3 b)
 {
-  a.x = safe_mod(a.x, b.x);
-  a.y = safe_mod(a.y, b.y);
-  a.z = safe_mod(a.z, b.z);
-  return a;
+  return float3(sdf_safe_divide(a.x, b.x), sdf_safe_divide(a.y, b.y), sdf_safe_divide(a.z, b.z));
 }
 
-vec2 safe_mod(vec2 a, vec2 b)
+float sdf_safe_sqrt(float a)
 {
-  a.x = safe_mod(a.x, b.x);
-  a.y = safe_mod(a.y, b.y);
-  return a;
+  return sqrt(max(0.0f, a));
 }
 
-float ndot(vec2 a, vec2 b)
+float sdf_safe_mod(float a, float b)
+{
+  return (b != 0.0f) ? a - b * floor(a / b) : 0.0f;
+}
+
+float3 sdf_safe_mod(float3 a, float b)
+{
+  return float3(sdf_safe_mod(a.x, b), sdf_safe_mod(a.y, b), sdf_safe_mod(a.z, b));
+}
+
+float3 sdf_safe_mod(float3 a, float3 b)
+{
+  return float3(sdf_safe_mod(a.x, b.x), sdf_safe_mod(a.y, b.y), sdf_safe_mod(a.z, b.z));
+}
+
+float2 sdf_safe_mod(float2 a, float2 b)
+{
+  return float2(sdf_safe_mod(a.x, b.x), sdf_safe_mod(a.y, b.y));
+}
+
+float ndot(float2 a, float2 b)
 {
   return a.x * b.x - a.y * b.y;
 }
 
-float dot2(in vec2 v)
+float dot2(float2 v)
 {
   return dot(v, v);
 }
 
-float cross2(in vec2 a, in vec2 b)
+float cross2(float2 a, float2 b)
 {
   return a.x * b.y - a.y * b.x;
 }
 
-vec2 sincos(float a)
+float2 sincos(float a)
 {
-  return vec2(sin(a), cos(a));
+  return float2(sin(a), cos(a));
 }
 
-/* Sign function that doesn't return 0 */
 float sgn(float v)
 {
-  return (v < 0.0) ? -1.0 : 1.0;
+  return (v < 0.0f) ? -1.0f : 1.0f;
 }
 
-vec2 sgn(vec2 v)
+float2 sgn(float2 v)
 {
-  return vec2((v.x < 0.0) ? -1.0 : 1.0, (v.y < 0.0) ? -1.0 : 1.0);
+  return float2((v.x < 0.0f) ? -1.0f : 1.0f, (v.y < 0.0f) ? -1.0f : 1.0f);
 }
 
-vec3 sgn(vec3 v)
+float3 sgn(float3 v)
 {
-  return vec3((v.x < 0.0) ? -1.0 : 1.0, (v.y < 0.0) ? -1.0 : 1.0, (v.z < 0.0) ? -1.0 : 1.0);
+  return float3((v.x < 0.0f) ? -1.0f : 1.0f, (v.y < 0.0f) ? -1.0f : 1.0f, (v.z < 0.0f) ? -1.0f : 1.0f);
 }
 
-// Maximum/minumum elements of a vector
-float vmax(vec2 v)
+float vmax(float2 v)
 {
   return max(v.x, v.y);
 }
 
-float vmax(vec3 v)
+float vmax(float3 v)
 {
   return max(max(v.x, v.y), v.z);
 }
 
-float vmax(vec4 v)
+float vmax(float4 v)
 {
   return max(max(v.x, v.y), max(v.z, v.w));
 }
 
-float vmin(vec2 v)
+float vmin(float2 v)
 {
   return min(v.x, v.y);
 }
 
-float vmin(vec3 v)
+float vmin(float3 v)
 {
   return min(min(v.x, v.y), v.z);
 }
 
-float vmin(vec4 v)
+float vmin(float4 v)
 {
   return min(min(v.x, v.y), min(v.z, v.w));
 }
@@ -121,85 +126,78 @@ float map_value(float value, float from_min, float from_max, float to_min, float
              d;
 }
 
-vec2 map_value(vec2 p, float from_min, float from_max, float to_min, float to_max, float d)
+float2 map_value(float2 p, float from_min, float from_max, float to_min, float to_max, float d)
 {
-  p.x = map_value(p.x, from_min, from_max, to_min, to_max, d);
-  p.y = map_value(p.y, from_min, from_max, to_min, to_max, d);
-  return p;
+  return float2(map_value(p.x, from_min, from_max, to_min, to_max, d),
+                map_value(p.y, from_min, from_max, to_min, to_max, d));
 }
 
-vec3 map_value(vec3 p, float from_min, float from_max, float to_min, float to_max, float d)
+float3 map_value(float3 p, float from_min, float from_max, float to_min, float to_max, float d)
 {
-  p.x = map_value(p.x, from_min, from_max, to_min, to_max, d);
-  p.y = map_value(p.y, from_min, from_max, to_min, to_max, d);
-  p.z = map_value(p.z, from_min, from_max, to_min, to_max, d);
-  return p;
+  return float3(map_value(p.x, from_min, from_max, to_min, to_max, d),
+                map_value(p.y, from_min, from_max, to_min, to_max, d),
+                map_value(p.z, from_min, from_max, to_min, to_max, d));
 }
 
-/**
- * Equivalent of smoothstep(c-w,c,x)-smoothstep(c,c+w,x)
- * t = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
- * return t * t * (3.0 - 2.0 * t);
- */
 float cubic_pulse(float center, float width, float x)
 {
   x = abs(x - center);
   float inv = sign(width);
-  width *= 0.5;
+  width *= 0.5f;
   width = abs(width);
   if (x > width) {
-    return inv >= 0.0 ? 0.0 : 1.0;
+    return inv >= 0.0f ? 0.0f : 1.0f;
   }
   else {
     x /= width;
-    x = 1.0 - x * x * (3.0 - 2.0 * x);
-    return inv > 0.0 ? x : 1.0 - x;
+    x = 1.0f - x * x * (3.0f - 2.0f * x);
+    return inv > 0.0f ? x : 1.0f - x;
   }
 }
 
-float p_mod1(inout float p, float size)
+float p_mod1(float &p, float size)
 {
-  float halfsize = size * 0.5;
+  float halfsize = size * 0.5f;
   float c = floor((p + halfsize) / size);
-  p = safe_mod(p + halfsize, size) - halfsize;
+  p = sdf_safe_mod(p + halfsize, size) - halfsize;
   return c;
 }
 
-float p_mirror(inout float p, float dist)
+float p_mirror(float &p, float dist)
 {
   float s = sgn(p);
   p = abs(p) - dist;
   return s;
 }
 
-vec3 p_mod_mirror3(inout vec3 p, vec3 size)
+float3 p_mod_mirror3(float3 &p, float3 size)
 {
-  vec3 halfsize = size * 0.5;
-  vec3 c = floor(safe_divide((p + halfsize), size));
-  p = safe_mod(p + halfsize, size) - halfsize;
-  p = p * (safe_mod(c, vec3(2.0)) * 2.0 - vec3(1.0));
+  float3 halfsize = size * 0.5f;
+  float3 c = floor(sdf_safe_divide(p + halfsize, size));
+  p = sdf_safe_mod(p + halfsize, size) - halfsize;
+  p = p * (sdf_safe_mod(c, float3(2.0f, 2.0f, 2.0f)) * 2.0f - float3(1.0f, 1.0f, 1.0f));
   return c;
 }
 
-vec2 p_mod_grid2(inout vec2 p, vec2 size)
+float2 p_mod_grid2(float2 &p, float2 size)
 {
-  vec2 c = floor(safe_divide((p + size * 0.5), size));
-  p = safe_mod(p + size * 0.5, size) - size * 0.5;
-  p = p * (safe_mod(c, vec2(2.0)) * 2.0 - vec2(1.0));
-  p -= size / 2.0;
+  float2 c = floor(sdf_safe_divide(p + size * 0.5f, size));
+  p = sdf_safe_mod(p + size * 0.5f, size) - size * 0.5f;
+  p = p * (sdf_safe_mod(c, float2(2.0f, 2.0f)) * 2.0f - float2(1.0f, 1.0f));
+  p -= size / 2.0f;
   if (p.x > p.y) {
-    p.xy = p.yx;
+    p = float2(p.y, p.x);
   }
-  c = floor(c / 2.0);
+  c = floor(c / 2.0f);
   return c;
 }
 
-vec2 rotate_45(vec2 p)
+float2 rotate_45(float2 p)
 {
-  return (p + vec2(p.y, -p.x)) * M_SQRT1_2;
+  return (p + float2(p.y, -p.x)) * M_SQRT1_2;
 }
 
-/* SDF Functions. */
+/* SDF combination operators. */
 
 float sdf_op_union(float a, float b)
 {
@@ -229,17 +227,17 @@ float sdf_op_exclusion(float a, float b, float gap, float gap2)
   return max(min(a, b) - gap2, -(max(a, b)) - gap);
 }
 
-vec3 sdf_op_bend(in vec3 p, float k)
+float3 sdf_op_bend(float3 p, float k)
 {
   float c = cos(k * p.x);
   float s = sin(k * p.x);
-  mat2 m = mat2(c, -s, s, c);
-  return vec3(m * p.xy, p.z);
+  float2x2 m = float2x2(c, -s, s, c);
+  return float3(m * float2(p.x, p.y), p.z);
 }
 
 float sdf_op_onion(float a, float k, int n)
 {
-  k *= 0.5;
+  k *= 0.5f;
   if (n > 0) {
     float d = a;
     for (int i = 0; i < n; i++) {
@@ -255,32 +253,30 @@ float sdf_op_onion(float a, float k, int n)
 float sdf_op_flatten(float a, float b, float v)
 {
   if (b > a) {
-    v = map_value(v, a, b, 0.0, 1.0, 0.0);
-    return clamp(v, 0.0, 1.0);
+    v = map_value(v, a, b, 0.0f, 1.0f, 0.0f);
+    return clamp(v, 0.0f, 1.0f);
   }
   else {
-    v = map_value(v, b, a, 0.0, 1.0, 0.0);
-    return clamp(v, 0.0, 1.0);
+    v = map_value(v, b, a, 0.0f, 1.0f, 0.0f);
+    return clamp(v, 0.0f, 1.0f);
   }
 }
 
-// The "Columns" flavour makes n-1 circular columns at a 45 degree angle:
 float sdf_op_union_columns(float a, float b, float r, float n)
 {
-  n += 1.0;
-  if ((a < r) && (b < r) && (n > 0.0)) {
-    vec2 p = vec2(a, b);
-    float columnradius = r * M_SQRT2 / ((n - 1.0) * 2.0 + M_SQRT2);
+  n += 1.0f;
+  if ((a < r) && (b < r) && (n > 0.0f)) {
+    float2 p = float2(a, b);
+    float columnradius = r * M_SQRT2 / ((n - 1.0f) * 2.0f + M_SQRT2);
     p = rotate_45(p);
-    p.x -= M_SQRT2 / 2.0 * r;
+    p.x -= M_SQRT2 / 2.0f * r;
     p.x += columnradius * M_SQRT2;
-    if (safe_mod(n, 2.0) == 1.0) {
+    if (sdf_safe_mod(n, 2.0f) == 1.0f) {
       p.y += columnradius;
     }
-    // At this point, we have turned 45 degrees and moved at a point on the
-    // diagonal that we want to place the columns on.
-    // Now, repeat the domain along this direction and place a circle.
-    p_mod1(p.y, columnradius * 2.0);
+    float py = p.y;
+    p_mod1(py, columnradius * 2.0f);
+    p.y = py;
     float result = length(p) - columnradius;
     result = min(result, p.x);
     result = min(result, a);
@@ -296,19 +292,19 @@ float sdf_op_diff_columns(float a, float b, float r, float n)
   a = -a;
   float m = min(a, b);
   if ((a < r) && (b < r)) {
-    vec2 p = vec2(a, b);
-    float columnradius = r * M_SQRT2 / n / 2.0;
-    columnradius = r * M_SQRT2 / ((n - 1.0) * 2.0 + M_SQRT2);
+    float2 p = float2(a, b);
+    float columnradius = r * M_SQRT2 / n / 2.0f;
+    columnradius = r * M_SQRT2 / ((n - 1.0f) * 2.0f + M_SQRT2);
     p = rotate_45(p);
     p.y += columnradius;
-    p.x -= M_SQRT2 / 2.0 * r;
-    p.x += -columnradius * M_SQRT2 / 2.0;
-
-    if (safe_mod(n, 2.0) == 1.0) {
+    p.x -= M_SQRT2 / 2.0f * r;
+    p.x += -columnradius * M_SQRT2 / 2.0f;
+    if (sdf_safe_mod(n, 2.0f) == 1.0f) {
       p.y += columnradius;
     }
-    p_mod1(p.y, columnradius * 2.0);
-
+    float py = p.y;
+    p_mod1(py, columnradius * 2.0f);
+    p.y = py;
     float result = -length(p) + columnradius;
     result = max(result, p.x);
     result = min(result, a);
@@ -324,16 +320,15 @@ float sdf_op_intersect_columns(float a, float b, float r, float n)
   return sdf_op_diff_columns(a, -b, r, n);
 }
 
-/* The "Round" variant uses a quarter-circle to join the two objects smoothly. */
 float sdf_op_union_round(float a, float b, float r)
 {
-  vec2 u = max(vec2(r - a, r - b), vec2(0.0));
+  float2 u = max(float2(r - a, r - b), float2(0.0f, 0.0f));
   return max(r, min(a, b)) - length(u);
 }
 
 float sdf_op_intersect_round(float a, float b, float r)
 {
-  vec2 u = max(vec2(r + a, r + b), vec2(0.0));
+  float2 u = max(float2(r + a, r + b), float2(0.0f, 0.0f));
   return min(-r, max(a, b)) + length(u);
 }
 
@@ -342,7 +337,6 @@ float sdf_op_diff_round(float a, float b, float r)
   return sdf_op_intersect_round(a, -b, r);
 }
 
-/* The "Chamfer" makes a 45-degree chamfered edge (the diagonal of a square of size <r>). */
 float sdf_op_union_chamfer(float a, float b, float r)
 {
   return min(min(a, b), (a - r + b) * M_SQRT1_2);
@@ -360,9 +354,9 @@ float sdf_op_diff_chamfer(float a, float b, float r)
 
 float sdf_op_union_smooth(float a, float b, float k)
 {
-  if (k != 0.0) {
-    float h = max(k - abs(a - b), 0.0);
-    return min(a, b) - h * h * 0.25 / k;
+  if (k != 0.0f) {
+    float h = max(k - abs(a - b), 0.0f);
+    return min(a, b) - h * h * 0.25f / k;
   }
   else {
     return min(a, b);
@@ -371,9 +365,9 @@ float sdf_op_union_smooth(float a, float b, float k)
 
 float sdf_op_diff_smooth(float a, float b, float k)
 {
-  if (k != 0.0) {
-    float h = max(k - abs(-b - a), 0.0);
-    return max(a, -b) + h * h * 0.25 / k;
+  if (k != 0.0f) {
+    float h = max(k - abs(-b - a), 0.0f);
+    return max(a, -b) + h * h * 0.25f / k;
   }
   else {
     return max(a, -b);
@@ -382,9 +376,9 @@ float sdf_op_diff_smooth(float a, float b, float k)
 
 float sdf_op_intersect_smooth(float a, float b, float k)
 {
-  if (k != 0.0) {
-    float h = max(k - abs(a - b), 0.0);
-    return max(a, b) + h * h * 0.25 / k;
+  if (k != 0.0f) {
+    float h = max(k - abs(a - b), 0.0f);
+    return max(a, b) + h * h * 0.25f / k;
   }
   else {
     return max(a, b);
@@ -395,7 +389,7 @@ float sdf_op_union_stairs(float a, float b, float r, float n)
 {
   float s = r / n;
   float u = b - r;
-  return min(min(a, b), 0.5 * (u + a + abs((safe_mod(u - a + s, 2.0 * s)) - s)));
+  return min(min(a, b), 0.5f * (u + a + abs((sdf_safe_mod(u - a + s, 2.0f * s)) - s)));
 }
 
 float sdf_op_intersect_stairs(float a, float b, float r, float n)
@@ -408,10 +402,9 @@ float sdf_op_diff_stairs(float a, float b, float r, float n)
   return -sdf_op_union_stairs(-a, b, r, n);
 }
 
-/* Produces a cylindical pipe that runs along the intersect. */
 float sdf_op_pipe(float a, float b, float r)
 {
-  return length(vec2(a, b)) - r;
+  return length(float2(a, b)) - r;
 }
 
 float sdf_op_engrave(float a, float b, float r)
@@ -429,53 +422,56 @@ float sdf_op_tongue(float a, float b, float ra, float rb)
   return min(a, max(a - ra, abs(b) - rb));
 }
 
-float sdf_op_extrude(inout vec3 p, in vec3 h)
+float sdf_op_extrude(float3 &p, float3 h)
 {
-  vec3 q = abs(p) - h;
-  vec3 b = sign(p) * max(q, 0.0);
-  vec4 r = vec4(b, min(max(q.x, max(q.y, q.z)), 0.0));
-  p = r.xyz;
+  float3 q = abs(p) - h;
+  float3 b = sign(p) * max(q, float3(0.0f, 0.0f, 0.0f));
+  float4 r = float4(b, min(max(q.x, max(q.y, q.z)), 0.0f));
+  p = float3(r.x, r.y, r.z);
   return -r.w;
 }
 
-vec3 sdf_op_spin(in vec3 p, float offset)
+float3 sdf_op_spin(float3 p, float offset)
 {
-  return vec3(length(p.xy) - offset, p.z, p.y);
+  return float3(length(float2(p.x, p.y)) - offset, p.z, p.y);
 }
 
-vec3 sdf_op_twist(in vec3 p, float k, float offset)
+float3 sdf_op_twist(float3 p, float k, float offset)
 {
   float c = cos(k * p.z + offset);
   float s = sin(k * p.z + offset);
-  mat2 m = mat2(c, -s, s, c);
-  return vec3(m * p.xy, p.z);
+  float2x2 m = float2x2(c, -s, s, c);
+  return float3(m * float2(p.x, p.y), p.z);
 }
 
-float sdf_op_reflect(inout vec3 p, vec3 plane_normal, float offset)
+float sdf_op_reflect(float3 &p, float3 plane_normal, float offset)
 {
   float t = dot(p, plane_normal) + offset;
-  if (t < 0.0) {
-    p = p - (2.0 * t) * plane_normal;
+  if (t < 0.0f) {
+    p = p - (2.0f * t) * plane_normal;
   }
   return sgn(t);
 }
 
-vec2 sdf_op_mirror(inout vec3 p, vec3 dist)
+float2 sdf_op_mirror(float3 &p, float3 dist)
 {
-  return p_mod_grid2(p.xy, dist.xy);
+  float2 pxy = float2(p.x, p.y);
+  float2 c = p_mod_grid2(pxy, float2(dist.x, dist.y));
+  p.x = pxy.x;
+  p.y = pxy.y;
+  return c;
 }
 
-float sdf_op_polar(inout vec2 p, float repetitions)
+float sdf_op_polar(float2 &p, float repetitions)
 {
-  float angle = safe_divide(2.0 * M_PI, repetitions);
-  float a = atan(p.y, p.x) + angle / 2.0;
+  float angle = sdf_safe_divide(2.0f * M_PI, repetitions);
+  float a = atan(p.y, p.x) + angle / 2.0f;
   float r = length(p);
   float c = floor(a / angle);
-  a = safe_mod(a, angle) - angle / 2.0;
-  p = vec2(cos(a), sin(a)) * r;
-  // For an odd number of repetitions, fix cell index of the cell in -x direction
-  // (cell index would be e.g. -5 and 5 in the two halves of the cell):
-  if (abs(c) >= (repetitions / 2.0))
+  a = sdf_safe_mod(a, angle) - angle / 2.0f;
+  p = float2(cos(a), sin(a)) * r;
+  if (abs(c) >= (repetitions / 2.0f)) {
     c = abs(c);
+  }
   return c;
 }
